@@ -1,0 +1,40 @@
+Traceback (most recent call last):
+  File "C:\Users\Asus\AppData\Local\Python\pythoncore-3.14-64\Lib\socket.py", line 855, in create_connection
+    sock.connect(sa)
+    ~~~~~~~~~~~~^^^^
+ConnectionRefusedError: [WinError 10061] No connection could be made because the target machine actively refused it
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\app.py", line 831, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\app.py", line 821, in main
+    print(f'[i] MySQL       : {db.server_version()} ({Config.MYSQL_DATABASE})')
+                               ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\db.py", line 150, in server_version
+    row = fetch_one('SELECT VERSION() AS version')
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\db.py", line 92, in fetch_one
+    return _run(sql, params, fetch='one')
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\db.py", line 73, in _run
+    with connection() as conn:
+         ~~~~~~~~~~^^
+  File "C:\Users\Asus\AppData\Local\Python\pythoncore-3.14-64\Lib\contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\db.py", line 52, in connection
+    conn = _connect(with_database)
+  File "C:\Users\Asus\Downloads\event-management-website\event-management-website\db.py", line 41, in _connect
+    return pymysql.connect(**kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Asus\Downloads\event-management-website\venv\Lib\site-packages\pymysql\connections.py", line 361, in __init__
+    self.connect()
+    ~~~~~~~~~~~~^^
+  File "C:\Users\Asus\Downloads\event-management-website\venv\Lib\site-packages\pymysql\connections.py", line 649, in connect
+    sock = socket.create_connection(
+        (self.host, self.port), self.connect_timeout, **kwargs
+    )
+  File "C:\Users\Asus\AppData\Local\Python\pythoncore-3.14-64\Lib\socket.py", line 862, in create_connection
+    exceptions.clear()  # raise only the last error
+    ~~~~~~~~~~~~~~~~^^
+KeyboardInterrupt

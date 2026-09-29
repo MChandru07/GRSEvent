@@ -1,0 +1,9 @@
+[!] SECRET_KEY is still a built-in / example value, so session cookies
+    can be forged. Set a random one in .env before going live:
+      python -c "import secrets; print(secrets.token_hex(32))"
+[i] Website     : http://127.0.0.1:5000/
+[i] Admin panel : http://127.0.0.1:5000/admin/login   (not linked from the website)
+[i] Public API  : http://127.0.0.1:5000/api/media     (published items only)
+[i] MySQL       : 8.4.9 (eventora_db)
+ * Serving Flask app 'app'
+ * Debug mode: off
