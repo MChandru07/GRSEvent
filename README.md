@@ -33,6 +33,8 @@ event-management-website/
 ├── storage.py           (upload validation, random file names, posters)
 ├── schema.sql           (database + tables – run by "python app.py init-db")
 ├── requirements.txt     (Flask, PyMySQL, python-dotenv)
+├── start.ps1            (Windows launcher: starts MySQL when needed, then Flask)
+├── .env                 (your own settings – a copy of .env.example, never committed)
 ├── .env.example         (copy to .env and fill in)
 ├── css/
 │   ├── style.css        (all site styling, light + dark theme via CSS variables)
@@ -83,6 +85,28 @@ python app.py                          # http://127.0.0.1:5000
 `python app.py check-db` prints the MySQL version, how many administrators exist and
 how the media library is split between published and admin-only items.
 `python app.py --help` lists every command.
+
+### MySQL on this machine
+
+There is no MySQL *Windows service* here (registering one needs an elevated shell), so
+nothing starts MySQL at boot. Two safety nets cover that, so the admin panel never ends
+up showing "The database is not reachable" over the sign-in form again:
+
+- **`MYSQL_AUTOSTART=1`** (the default on Windows, in `.env`): the first query that finds
+  nothing listening on `MYSQL_HOST:MYSQL_PORT` starts MySQL exactly the way the launcher
+  does, waits for the port and retries the connection. That happens inside `db.py`, so it
+  also covers `python app.py` started from the editor or by hand. The attempt is made at
+  most once per process, only for a local host, and **only** when the port is closed – a
+  wrong password, a deleted database or a hosted MySQL never start a server.
+- **`.\start.ps1`** does the same before it boots Flask: `.\start.ps1` (or nothing, it is
+  the default action) starts MySQL if port 3306 is closed and then runs the website,
+  `.\start.ps1 db` starts only the database, `.\start.ps1 status` reports what is up,
+  `.\start.ps1 stop` shuts the website and MySQL down.
+
+Set `MYSQL_AUTOSTART=0` to switch the automatic start off, and `MYSQLD_PATH` /
+`MYSQL_DEFAULTS_FILE` / `MYSQL_START_TIMEOUT` when `mysqld` lives somewhere unusual or
+needs longer to come up. The VS Code task **MySQL: start (port 3306)** calls the launcher
+for you, and the two "Flask: run app" tasks run it first.
 
 ### Option B – just the static pages
 

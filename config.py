@@ -84,6 +84,22 @@ class Config:
     MYSQL_CHARSET = 'utf8mb4'
     MYSQL_CONNECT_TIMEOUT = _int('MYSQL_CONNECT_TIMEOUT', 5)
 
+    # ------------------------------------------------------ MySQL auto-start --
+    # This machine has no registered MySQL Windows *service* (installing one
+    # needs an elevated shell), so the server is started by start.ps1. Forget
+    # that once and the admin panel answers "The database is not reachable"
+    # instead of the sign-in form. With this switch on, db.py starts MySQL
+    # itself the first time the port refuses a connection, so the admin area
+    # works no matter how the app was launched.
+    #
+    # It is only ever tried on a local host and only when nothing listens on the
+    # port - a wrong password or a missing database never starts a server.
+    MYSQL_AUTOSTART = _flag('MYSQL_AUTOSTART', os.name == 'nt')
+    MYSQLD_PATH = (os.getenv('MYSQLD_PATH') or '').strip()       # empty = search for it
+    MYSQL_DEFAULTS_FILE = (os.getenv('MYSQL_DEFAULTS_FILE') or
+                           r'C:\ProgramData\MySQL\MySQL Server 8.4\my.ini')
+    MYSQL_START_TIMEOUT = _int('MYSQL_START_TIMEOUT', 60)        # seconds to wait for the port
+
     # ------------------------------------------------------- the static site --
     # SITE_ROOT is the folder holding index.html / events.html / css / js /
     # images / video. Uploaded media does NOT live here – it is served by the

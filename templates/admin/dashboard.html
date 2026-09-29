@@ -45,7 +45,10 @@
       <h2>MySQL is not reachable</h2>
       <p>{{ db_error }}</p>
       <ol class="admin-alert__steps">
-        <li>Start MySQL (XAMPP, WAMP, MySQL Server or a hosted database).</li>
+        <li>Start MySQL: run <code>.\start.ps1 db</code> in the project folder (no MySQL
+            Windows service is registered on this machine, so nothing starts it at boot).</li>
+        <li>Keep <code>MYSQL_AUTOSTART=1</code> in <code>.env</code> and the app starts MySQL
+            by itself the next time the port is closed – see this panel's log output.</li>
         <li>Check <code>MYSQL_HOST</code>, <code>MYSQL_PORT</code>, <code>MYSQL_USER</code>
             and <code>MYSQL_PASSWORD</code> in <code>.env</code>.</li>
         <li>Run <code>python app.py init-db</code> to create the tables and the first administrator.</li>

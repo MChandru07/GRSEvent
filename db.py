@@ -4,11 +4,22 @@ Every query in the project lives here so that app.py stays about HTTP and the
 templates stay about markup. All MySQL errors are re-raised as
 ``DatabaseUnavailable`` so the website can show a friendly message instead of a
 stack trace when the database is not running yet.
+
+When nothing is listening on the MySQL port, the first connection starts the
+server itself (see ``_start_mysql`` and ``MYSQL_AUTOSTART`` in config.py) and
+tries again, so the admin panel works even when MySQL was not started by hand.
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import socket
+import subprocess
+import threading
+import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import pymysql
 from pymysql.cursors import DictCursor
@@ -21,8 +32,137 @@ class DatabaseUnavailable(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
+#  Starting MySQL when it is not running
+# --------------------------------------------------------------------------- #
+# This machine has no registered MySQL Windows *service*, so the server used to
+# be started by hand (see start.ps1): forget that once and the admin panel
+# answered "The database is not reachable" instead of the sign-in form.
+#
+# When - and only when - the port refuses the connection, the first query of the
+# process starts MySQL the same way start.ps1 does, waits for the port and tries
+# again. One attempt per process, never on a remote host, and never for a wrong
+# password or a missing database.
+_LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
+_UNREACHABLE_CODES = (2002, 2003)         # CR_CONNECTION_ERROR / CR_CONN_HOST_ERROR
+
+_SERVER_LOCK = threading.Lock()
+_server_start_tried = False
+
+
+def _is_server_down(exc: BaseException) -> bool:
+    """True for 'nothing is listening on the MySQL port' (2002 / 2003)."""
+    args = getattr(exc, 'args', ()) or ()
+    return bool(args) and args[0] in _UNREACHABLE_CODES
+
+
+def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
+    """True when something already accepts TCP connections on host:port."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.settimeout(timeout)
+            return probe.connect_ex((host, port)) == 0
+    except OSError:
+        return False
+
+
+def _find_mysqld() -> str | None:
+    """The mysqld binary: MYSQLD_PATH, PATH, the MySQL 8.4 install, any install."""
+    candidates = []
+    if Config.MYSQLD_PATH:
+        candidates.append(Path(Config.MYSQLD_PATH))
+    from_path = shutil.which('mysqld.exe') or shutil.which('mysqld')
+    if from_path:
+        candidates.append(Path(from_path))
+    if os.name == 'nt':
+        candidates.append(Path(r'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe'))
+    else:
+        candidates += [Path('/usr/sbin/mysqld'), Path('/usr/bin/mysqld'),
+                       Path('/usr/local/mysql/bin/mysqld')]
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    # Any other MySQL version installed under "Program Files\MySQL".
+    for folder in sorted(Path(r'C:\Program Files\MySQL').glob('*/bin/mysqld.exe')):
+        if folder.is_file():
+            return str(folder)
+    return None
+
+
+def _start_mysql() -> bool:
+    """Starts MySQL if it is down. True once the port answers.
+
+    Runs at most once per process: a second request must not spawn a second
+    server just because the first attempt failed.
+    """
+    global _server_start_tried
+
+    if not Config.MYSQL_AUTOSTART:
+        return False
+    if (Config.MYSQL_HOST or '').strip().lower() not in _LOCAL_HOSTS:
+        return False                              # a hosted database is not ours to start
+    if _port_open(Config.MYSQL_HOST, Config.MYSQL_PORT):
+        return False                              # something is listening already
+
+    with _SERVER_LOCK:
+        if _server_start_tried:
+            return False
+        _server_start_tried = True
+
+        mysqld = _find_mysqld()
+        if mysqld is None:
+            print('[!] MySQL is not running and mysqld could not be found. Start it with '
+                  '".\\start.ps1 db", or set MYSQLD_PATH in .env.')
+            return False
+
+        command = [mysqld]
+        defaults = Path(Config.MYSQL_DEFAULTS_FILE) if Config.MYSQL_DEFAULTS_FILE else None
+        if defaults and defaults.is_file():
+            command.append(f'--defaults-file={defaults}')   # must be the first option
+        elif defaults:
+            print(f"[i] No MySQL defaults file at {defaults} - using MySQL's own defaults.")
+
+        options = {'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL,
+                   'stderr': subprocess.DEVNULL, 'close_fds': True}
+        if os.name == 'nt':
+            # Detached, so MySQL keeps running when the web server is stopped -
+            # exactly what "start.ps1 db" does with Start-Process.
+            options['creationflags'] = (subprocess.DETACHED_PROCESS |
+                                        subprocess.CREATE_NEW_PROCESS_GROUP)
+        else:
+            options['start_new_session'] = True
+
+        print(f'[i] MySQL is not running - starting it ({mysqld}).')
+        try:
+            subprocess.Popen(command, **options)
+        except OSError as exc:
+            print(f'[!] MySQL could not be started ({exc}).')
+            return False
+
+        deadline = time.monotonic() + max(Config.MYSQL_START_TIMEOUT, 1)
+        while time.monotonic() < deadline:
+            if _port_open(Config.MYSQL_HOST, Config.MYSQL_PORT):
+                print(f'[ok] MySQL is up on {Config.MYSQL_HOST}:{Config.MYSQL_PORT}.')
+                return True
+            time.sleep(0.5)
+
+        print(f'[!] MySQL did not answer on {Config.MYSQL_HOST}:{Config.MYSQL_PORT} within '
+              f'{Config.MYSQL_START_TIMEOUT} s. Check "{Config.MYSQL_DEFAULTS_FILE}" and '
+              'the mysql-error.log next to its data folder.')
+        return False
+
+
+# --------------------------------------------------------------------------- #
 #  Connection handling
 # --------------------------------------------------------------------------- #
+def server_reachable(timeout: float = 0.5) -> bool:
+    """True when something accepts connections on the MySQL port.
+
+    A fast TCP probe (no query, no password): used by the admin sign-in page to
+    say "MySQL is not running" before anybody types a password.
+    """
+    return _port_open(Config.MYSQL_HOST, Config.MYSQL_PORT, timeout)
+
+
 def _connect(with_database: bool = True):
     """Opens one connection. `with_database=False` is used to CREATE DATABASE."""
     kwargs = {
@@ -40,10 +180,23 @@ def _connect(with_database: bool = True):
     try:
         return pymysql.connect(**kwargs)
     except pymysql.MySQLError as exc:
+        failure = exc
+        if _is_server_down(exc) and _start_mysql():
+            # A fresh server may refuse queries for a moment while InnoDB
+            # finishes its start-up, so the connection is retried a few times.
+            for attempt in range(5):
+                if attempt:
+                    time.sleep(0.5)
+                try:
+                    return pymysql.connect(**kwargs)
+                except pymysql.MySQLError as retry_exc:
+                    failure = retry_exc
+                    if not _is_server_down(retry_exc):
+                        break                    # a different problem - stop retrying
         raise DatabaseUnavailable(
             f'Cannot connect to MySQL at {Config.MYSQL_HOST}:{Config.MYSQL_PORT} '
-            f'as "{Config.MYSQL_USER}" ({exc}).'
-        ) from exc
+            f'as "{Config.MYSQL_USER}" ({failure}).'
+        ) from failure
 
 
 @contextmanager

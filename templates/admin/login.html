@@ -17,6 +17,13 @@
 
     {% include 'admin/_flashes.html' %}
 
+    {% if database_down %}
+      <p class="admin-auth__foot">
+        <strong>MySQL is not running.</strong> Start it with <code>.\start.ps1 db</code>, or keep
+        <code>MYSQL_AUTOSTART=1</code> in <code>.env</code> and the app starts it for you.
+      </p>
+    {% endif %}
+
     <form class="admin-form" method="post" action="{{ url_for('admin_login') }}" autocomplete="on">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ next_url }}">
