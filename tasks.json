@@ -22,11 +22,11 @@
     },
     {
       "label": "Flask: run app (project folder)",
-      "detail": "Starts the dev server from the event-management-website folder.",
+      "detail": "Starts the dev server from the workspace root.",
       "type": "shell",
       "command": ".\\venv\\Scripts\\python.exe app.py",
       "options": {
-        "cwd": "${workspaceFolder}\\event-management-website"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
       "presentation": {
@@ -41,7 +41,7 @@
       "type": "shell",
       "command": ".\\venv\\Scripts\\python.exe -m pip install -r requirements.txt",
       "options": {
-        "cwd": "${workspaceFolder}\\event-management-website"
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
       "presentation": {

@@ -5,8 +5,8 @@
       "name": "Python: Flask (event-management-website)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}\\event-management-website\\app.py",
-      "cwd": "${workspaceFolder}\\event-management-website",
+      "program": "${workspaceFolder}\\app.py",
+      "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}\\venv\\Scripts\\python.exe",
       "console": "integratedTerminal",
       "justMyCode": true

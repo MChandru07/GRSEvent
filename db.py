@@ -269,10 +269,9 @@ def ensure_schema() -> dict:
     statements = split_statements(Config.SCHEMA_FILE.read_text(encoding='utf-8'))
     applied, skipped = 0, 0
 
-    # NOTE: the old code skipped CREATE DATABASE / USE while connected with
-    # with_database=False, so CREATE TABLE ran with "no database selected"
-    # and init-db always failed. Fixed: create the DB explicitly, select it,
-    # then apply every other statement.
+    # Create the database first (without selecting it), then connect to it
+    # and apply all schema statements. This ensures CREATE TABLE runs with
+    # the correct database selected, not "no database selected".
     db_name = Config.MYSQL_DATABASE
     # Very small identifier guard – database name comes from .env.
     if not re.fullmatch(r'[A-Za-z0-9_]+', db_name or ''):
@@ -285,14 +284,20 @@ def ensure_schema() -> dict:
                     f'CREATE DATABASE IF NOT EXISTS `{db_name}` '
                     'CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
                 )
-                conn.select_db(db_name)
+                conn.commit()
+
+        # Now connect to the newly created database and apply all statements
+        with connection(with_database=True) as conn:
+            with conn.cursor() as cur:
                 for statement in statements:
                     upper = statement.upper().lstrip()
+                    # Skip CREATE DATABASE and USE statements as we're already connected
                     if upper.startswith('CREATE DATAB') or upper.startswith('USE '):
                         skipped += 1
                         continue
                     cur.execute(statement)
                     applied += 1
+                conn.commit()
     except pymysql.MySQLError as exc:
         raise DatabaseUnavailable(str(exc)) from exc
     return {'statements': applied, 'skipped': skipped,
